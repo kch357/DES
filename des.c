@@ -96,7 +96,41 @@ unsigned int E[] = {
     28, 29, 30, 31, 32,  1
 };
 
-uint8_t get_bit(unsigned char *data, int n) {
+unsigned int P[] = {
+    16,  7, 20, 21,
+    29, 12, 28, 17,
+     1, 15, 23, 26,
+     5, 18, 31, 10,
+     2,  8, 24, 14,
+    32, 27,  3,  9,
+    19, 13, 30,  6,
+    22, 11,  4, 25
+};
+
+unsigned int PC1[] = {
+    57, 49, 41, 33, 25, 17,  9,
+     1, 58, 50, 42, 34, 26, 18,
+    10,  2, 59, 51, 43, 35, 27,
+    19, 11,  3, 60, 52, 44, 36,
+
+    63, 55, 47, 39, 31, 23, 15,
+     7, 62, 54, 46, 38, 30, 22,
+    14,  6, 61, 53, 45, 37, 29,
+    21, 13,  5, 28, 20, 12,  4
+};
+
+unsigned int PC2[] = {
+    14, 17, 11, 24,  1,  5,
+     3, 28, 15,  6, 21, 10,
+    23, 19, 12,  4, 26,  8,
+    16,  7, 27, 20, 13,  2,
+    41, 52, 31, 37, 47, 55,
+    30, 40, 51, 45, 33, 48,
+    44, 49, 39, 56, 34, 53,
+    46, 42, 50, 36, 29, 32
+};
+
+uint8_t get_bit(unsigned char *data, int n) {   //비트로 변환
     // n은 1 ~ 64
     int byte_index = (n - 1) / 8; // 몇 번째 바이트에 있는지 계산 (0 ~ 7)
     int bit_index = (n - 1) % 8;  // 그 바이트 내에서 몇 번째 비트인지 계산 (0 ~ 7)
@@ -105,7 +139,7 @@ uint8_t get_bit(unsigned char *data, int n) {
     return (data[byte_index] >> (7 - bit_index)) & 1;
 }
 
-void f_function(unsigned char *R, unsigned char *Key) {
+void f_function(unsigned int *R, unsigned int *Key) {
     unsigned int ER[49];
     for (int i = 1; i < 49; i++){   //Expansion & Key XOR
         ER[i] = R[E[i-1]];
@@ -116,17 +150,30 @@ void f_function(unsigned char *R, unsigned char *Key) {
     for (int i = 0; i < 8; i++) //ER을 S박스에 넣어서 나온 값을 R에 넣기
     {
         row = (ER[i * 6 + 1] << 1) | ER[i * 6 + 6];
-        column = (ER[i * 6 + 2] << 3) | (ER[i * 6 + 3] << 2) | (ER[i * 6 + 4] << 1) | ER[i * 6] + 5;
+        column = (ER[i * 6 + 2] << 3) | (ER[i * 6 + 3] << 2) | (ER[i * 6 + 4] << 1) | ER[i * 6 + 5];
         R[i*4 + 1] = (S[i][row][column] >> 3) & 1; // 8의 자리
         R[i*4 + 2] = (S[i][row][column] >> 2) & 1; // 4의 자리
         R[i*4 + 3] = (S[i][row][column] >> 1) & 1; // 2의 자리
         R[i*4 + 4] = (S[i][row][column] >> 0) & 1; // 1의 자리
     }
-
-    // return R;
+    unsigned int Final_R[33];
+    for (int i = 0; i < 32; i ++)
+        Final_R[i+1] = R[P[i]];
+    memcpy(R + 1, Final_R + 1, sizeof(unsigned int) * 32);  //코드 복사
 };
 
-char plaintext[] = "QWERASDF";
+void Key_Transform(unsigned int *C, unsigned int *D) {
+    //Left Shift
+    unsigned int num = C[1];
+    memcpy(C + 1, C + 2, sizeof(unsigned int) * 27);
+    C[28] = num;
+    num = D[1];
+    memcpy(D + 1, D + 2, sizeof(unsigned int) * 27);
+    D[28] = num;
+};
+
+unsigned char plaintext[] = "QWERASDF";
+unsigned char my_key_str[] = "MYSECRET";
 
 int main() {
     // printf("please chat your plaintext.\n");
@@ -139,18 +186,48 @@ int main() {
     printf("%s is your plaintext.\n", plaintext);
     printf("%zu", len);
     */
-    unsigned int bitpt[65]; //평문 비트화 하기
+
+    unsigned int bitpt[65]; //평문 비트화
     unsigned int R[33]; //평문 R
     unsigned int L[33]; //평문 L
     for (int i = 1; i < 65; i++){
-        bitpt[i] = get_bit(plaintext, i);
-        if (i > 32)
+        bitpt[i] = get_bit(plaintext, i);  //평문 비트화 하기
+        if (i > 32)   //평문 R, L 분리
             L[i-32] = get_bit(plaintext, i);
         else
             R[i] = get_bit(plaintext, i);
     }
     
+    unsigned int Key[65];
+    unsigned int C[29]; //Key C
+    unsigned int D[29]; //Key D
+    for (int i = 1; i <= 64; i++)
+        Key[i] = get_bit(my_key_str, i);  //평문 비트화 하기
+    for (int i = 1; i <= 28; i++){
+        C[i] = Key[PC1[i - 1]];
+        D[i] = Key[PC1[i + 27]];
+    }
     
+    //round 1
+    unsigned int Round_Key[49];
+    unsigned int Out_R[33];
+    unsigned int Out_L[33];
+    for (int k = 1; k <= 16; k++){
+        for (int i = 1; i <= k; i++)        //수정필
+            Key_Transform(C,D);     //transform
+        memcpy(Key + 1, C + 1, sizeof(unsigned int) * 28);
+        memcpy(Key + 29, D + 1, sizeof(unsigned int) * 28);
+        for (int i = 1; i <= 48; i++)   //라운드 키
+            Round_Key[i] = Key[PC2[i-1]];
+        memcpy(Out_L + 1, R + 1, sizeof(unsigned int) * 32);    //Out_L 만들기
+        f_function(R, Round_Key);   //R에 f-function 적용
+        for (int i = 1; i <= 32; i++)     //Out_R 만들기
+            Out_R[i] = L[i] ^ R[i];
+        memcpy(R + 1, Out_R + 1, sizeof(unsigned int) * 32);
+        memcpy(L + 1, Out_L + 1, sizeof(unsigned int) * 32);
+    }
+    
+
     //initial Permutation IP(x)
     /*
     char ipx[64];
