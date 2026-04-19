@@ -149,7 +149,6 @@ int main() {
         else
             R[i] = get_bit(plaintext, i);
     }
-    000000
     
     
     //initial Permutation IP(x)
