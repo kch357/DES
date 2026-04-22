@@ -1,6 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdint.h>
 
@@ -173,7 +171,7 @@ void Key_Transform(unsigned int *C, unsigned int *D) {
 };
 
 unsigned char plaintext[] = "QWERASDF";
-unsigned char my_key_str[] = "MYSECRET";
+unsigned char key_str[] = "KCHTBLOG";
 
 int main() {
     // printf("please chat your plaintext.\n");
@@ -190,19 +188,16 @@ int main() {
     unsigned int bitpt[65]; //평문 비트화
     unsigned int R[33]; //평문 R
     unsigned int L[33]; //평문 L
-    for (int i = 1; i < 65; i++){
-        bitpt[i] = get_bit(plaintext, i);  //평문 비트화 하기
-        if (i > 32)   //평문 R, L 분리
-            L[i-32] = get_bit(plaintext, i);
-        else
-            R[i] = get_bit(plaintext, i);
-    }
+    for (int i = 1; i <= 64; i++)
+        bitpt[i] = get_bit(plaintext, IP[i-1]);  //평문 비트화 하기, IP까지 한번에
+    memcpy(L + 1, bitpt + 1, sizeof(unsigned int) * 32);
+    memcpy(R + 1, bitpt + 33, sizeof(unsigned int) * 32);
     
     unsigned int Key[65];
     unsigned int C[29]; //Key C
     unsigned int D[29]; //Key D
     for (int i = 1; i <= 64; i++)
-        Key[i] = get_bit(my_key_str, i);  //평문 비트화 하기
+        Key[i] = get_bit(key_str, i);  //키 비트화 하기
     for (int i = 1; i <= 28; i++){
         C[i] = Key[PC1[i - 1]];
         D[i] = Key[PC1[i + 27]];
@@ -212,30 +207,36 @@ int main() {
     unsigned int Round_Key[49];
     unsigned int Out_R[33];
     unsigned int Out_L[33];
+
     for (int k = 1; k <= 16; k++){
-        for (int i = 1; i <= k; i++)        //수정필
+        Key_Transform(C,D);     //transform
+        if (k != 1 && k != 2 && k != 9 && k != 16) //이 때는 2번이므로
             Key_Transform(C,D);     //transform
         memcpy(Key + 1, C + 1, sizeof(unsigned int) * 28);
         memcpy(Key + 29, D + 1, sizeof(unsigned int) * 28);
-        for (int i = 1; i <= 48; i++)   //라운드 키
-            Round_Key[i] = Key[PC2[i-1]];
+        for (int i = 1; i <= 48; i++)   //라운드 키 생성
+            Round_Key[i] = Key[PC2[i-1]];   //PC22
         memcpy(Out_L + 1, R + 1, sizeof(unsigned int) * 32);    //Out_L 만들기
         f_function(R, Round_Key);   //R에 f-function 적용
         for (int i = 1; i <= 32; i++)     //Out_R 만들기
             Out_R[i] = L[i] ^ R[i];
-        memcpy(R + 1, Out_R + 1, sizeof(unsigned int) * 32);
-        memcpy(L + 1, Out_L + 1, sizeof(unsigned int) * 32);
+        memcpy(R + 1, Out_R + 1, sizeof(unsigned int) * 32);    //R에 Out_R 대입 (f_function 반복사용하기 위함)
+        memcpy(L + 1, Out_L + 1, sizeof(unsigned int) * 32);    //L에 Out_L 대입 (f_function 반복사용하기 위함)
     }
+    memcpy(bitpt + 1, R + 1, sizeof(unsigned int) * 32);    //마지막에 한번 더 전치를 하기 때문에 R이 먼저
+    memcpy(bitpt + 33, L + 1, sizeof(unsigned int) * 32);
+    unsigned int bitct[65]; //암호문
+    for (int i = 1; i <= 64; i++)  //inv_IP
+        bitct[i] = bitpt[inv_IP[i-1]];
     
-
-    //initial Permutation IP(x)
-    /*
-    char ipx[64];
-    for (size_t i = 0; i < 64; i++)
-    {
-        ipx[i] = plaintext[inv_IP[i]];
+    printf("Ciphertext (HEX): ");
+    for (int i = 0; i < 8; i++) {
+        unsigned int byte = 0;
+        for (int j = 1; j <= 8; j++)
+            byte = (byte << 1) | bitct[i * 8 + j];
+        printf("%02X ", byte);
     }
-    */
+    printf("\n");
 
     return 0;
 }
